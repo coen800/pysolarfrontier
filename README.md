@@ -35,5 +35,5 @@ async def example():
         print('date:            ', sensor.date)
         print('enabled:         ', sensor.enabled)
 
-asyncio.run(example
+asyncio.run(example())
 ```
