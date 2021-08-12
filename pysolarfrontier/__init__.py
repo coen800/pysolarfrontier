@@ -1,6 +1,7 @@
 """PySolarFrontier interacts as a library to communicate with
 Solar Frontier inverters."""
 from datetime import date
+
 import aiohttp
 
 
@@ -86,24 +87,27 @@ class SF(object):
 
     async def get_sensor_value(session, url, total_yield=False):
         """Get solar production values from SF inverter"""
-        if total_yield:
-            async with session.get(url) as response:
-                async for line in response.content:
-                    if line:
-                        line = line.decode()
-                        if "innerHTML" in line:
-                            line = line[53:-2].split(' ')
-                            line = list(filter(None, line))
-                            return line[0][:-4]
-        else:
-            async with session.get(url) as response:
-                async for line in response.content:
-                    if line:
-                        line = line.decode()
-                        if "innerHTML" in line:
-                            line = line[53:-2].split(' ')
-                            line = list(filter(None, line))
-                            return line[0][:-3]
+        try:
+            if total_yield:
+                async with session.get(url) as response:
+                    async for line in response.content:
+                        if line:
+                            line = line.decode()
+                            if "innerHTML" in line:
+                                line = line[53:-2].split(' ')
+                                line = list(filter(None, line))
+                                return line[0][:-4]
+            else:
+                async with session.get(url) as response:
+                    async for line in response.content:
+                        if line:
+                            line = line.decode()
+                            if "innerHTML" in line:
+                                line = line[53:-2].split(' ')
+                                line = list(filter(None, line))
+                                return line[0][:-3]
+        except aiohttp.client_exceptions.ServerDisconnectedError as err:
+            raise UnexpectedResponseException(err)
 
     async def read(self, sensors):
         """Returns necessary sensors from SF inverter"""
@@ -111,7 +115,6 @@ class SF(object):
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout,
                                              raise_for_status=True) as session:
-
                 url_day = self.url_day
                 url_month = self.url_month
                 url_year = self.url_year
@@ -124,21 +127,18 @@ class SF(object):
                         sen.date = date.today()
                         sen.enabled = True
                         at_least_one_enabled = True
-
                     elif sen.key == 'month':
                         sen.value = await SF.get_sensor_value(session,
                                                               url_month)
                         sen.date = date.today()
                         sen.enabled = True
                         at_least_one_enabled = True
-
                     elif sen.key == 'year':
                         sen.value = await SF.get_sensor_value(session,
                                                               url_year)
                         sen.date = date.today()
                         sen.enabled = True
                         at_least_one_enabled = True
-
                     elif sen.key == 'total':
                         sen.value = await SF.get_sensor_value(session,
                                                               url_total,
@@ -149,11 +149,18 @@ class SF(object):
 
                 if not at_least_one_enabled:
                     raise NoSensorsEnabledException("No sensors enabled")
-
                 return True
 
+        except aiohttp.client_exceptions.ClientConnectorError as err:
+            raise ConnectionErrorException(err)
         except aiohttp.client_exceptions.ClientResponseError as err:
             raise UnexpectedResponseException(err)
+
+
+class ConnectionErrorException(Exception):
+    """Exception for connection error."""
+    def __init__(self, message):
+        Exception.__init__(self, message)
 
 
 class UnexpectedResponseException(Exception):
